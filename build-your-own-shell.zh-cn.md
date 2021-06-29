@@ -124,7 +124,62 @@ std::vector<std::string> xc_utils::split(const std::string& str) {
 
 ### 执行
 
-placeholder
+当我们在shell中输入指令，并按下回车时，shell会启动一个新的进程来运行我们的程序，程序会在PATH环境变量中查找，程序运行时，shell会阻塞住，直到程序退出。比如我们输入`ls -l`，并回车时，shell在PATH环境中找到`/bin/ls`然后运行，并将参数`-l`传递给它，接着等待ls退出。时序图大概是这样的：
+
+```
+ls        ----
+shell ----    ----
+```
+
+`ls`开始运行时，shell就阻塞，直到`ls`退出。
+
+```c++
+pid_t pid = fork();
+if (pid == 0) {
+  return ProcessChild(command, args, err_os);
+} else {
+  WaitChildExit(pid);
+}
+```
+
+这里我们使用Linux系统调用`fork`来产生新的进程，新的进程会变成当前进程的子进程，并且会复制父进程的资源，包括代码。`fork`调用一次，会返回两次。`pid`为0时，代表当前是子进程，我们这里调用了`ProcessChild`来运行用户输入的指令。如果`pid`大于0，代表当前是父进程，`pid`的值为子进程的进程号。我们这里调用了`WaitChildExit`阻塞父进程，等待子进程退出。（可以使用`man fork`来查看`fork`系统调用的更多信息）
+
+再来看一下`ProcessChild`的内部细节：
+
+```c++
+int CommandExecutor::ProcessChild(const std::string &command,
+                                   const std::vector<std::string> &args,
+                                   std::ostream &err_os) {
+   // child
+   auto argv = BuildArgv(command, args);
+
+   auto ret = execvp(command.c_str(), &argv[0]);
+   // should not execute to here if success
+   if (ret == ERROR_CODE_SYSTEM) {
+     PrintSystemError(err_os);
+   }
+   return ERROR_CODE_DEFAULT;
+ }
+```
+
+我们首先调用`BuildArgv`构造了参数，对于上面提到的`ls -l`的例子，我们会构建出`['ls', '-l', '\0']`，第0个参数和命令名一致，最后一个参数为`\0`，因为C语言数组在传参的时候，会丢失长度信息，所以这里用`\0`来指示数组末尾。
+
+构造好参数列表之后，我们使用`execvp`来执行`ls -l`，`execvp`会在PATH环境变量指示的目录中查找`ls`，然后执行，执行的时候，会替换掉当前进程的所有代码，即用`ls`的代码替换当前的代码，如果执行成功的话，不会返回。（可以使用`man execvp`来查看`execvp`系统调用的更多信息）
+
+再回头看看父进程干啥去了：
+
+```c++
+void CommandExecutor::WaitChildExit(pid_t pid) {
+   int status;
+   do {
+     waitpid(pid, &status, WUNTRACED);
+   } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+ }
+```
+
+父进程通过`waitpid`系统调用来获取子进程状态的变化信息，如果子进程没有退出，就继续观察，直到子进程退出。（可以使用`man waitpid`来查看`waitpid`系统调用的更多信息）
+
+[相关代码提交](https://github.com/superxcgm/xcShell/pull/16) （可以先忽略代码中和管道`pipe`相关的代码）
 
 ### 内建命令支持：`cd`
 
