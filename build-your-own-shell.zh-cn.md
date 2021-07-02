@@ -239,4 +239,49 @@ handler为一个函数指针，指向了返回值为int，参数为args和ostrea
 
 ### 显示当前所在目录
 
-placeholder
+一般来说，shell都会提示我们当前在哪个目录，所以我们也需要实现这个功能。我们这里不会显示完整的绝对路径，只会显示最后一级目录，比如`/home/superxcgm/Download`，我们只会显示`Download`。
+
+我们通过`getcwd`库函数获的当前的工作目录（绝对路径）。
+
+```c++
+std::string xc_utils::GetCurrentWorkingDirectory(std::ostream& err_os) {
+   char buf[BUFSIZ];
+   if (getcwd(buf, BUFSIZ) == nullptr) {
+     PrintSystemError(err_os);
+     return "";
+   }
+   return buf;
+ }
+```
+
+然后截取最后一个目录，但是对于根目录`/`，最后一个目录就是`/`。
+
+```c++
+std::string xc_utils::GetLastDir(const std::string& path) {
+   if (path == "/") {
+     return "/";
+   }
+   std::string path_std =
+       path[path.size() - 1] == '/' ? path.substr(0, path.size() - 1) : path;
+   auto idx = path_std.rfind('/');
+   return path_std.substr(idx + 1);
+ }
+```
+
+然后生成提示字符串，如果是用户HOME目录，我们直接显示`~`。
+
+```c++
+std::string XcShell::generatePrompt(std::ostream &err_os) {
+   auto pwd = xc_utils::GetCurrentWorkingDirectory(err_os);
+   auto home = xc_utils::GetHomeDir();
+   std::string dir;
+   if (home == pwd) {
+     dir = "~";
+   } else {
+     dir = xc_utils::GetLastDir(pwd);
+   }
+   return dir + " > ";
+ }
+```
+
+[相关代码提交](https://github.com/superxcgm/xcShell/pull/20) 
