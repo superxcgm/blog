@@ -183,7 +183,59 @@ void CommandExecutor::WaitChildExit(pid_t pid) {
 
 ### 内建命令支持：`cd`
 
-placeholder
+通过`which cd`命令，我们可以发现，cd其实是一个内建命令（build-in），不是一个程序，主要用于修改shell的工作目录。
+
+```c++
+std::string GetHome() {
+   auto pw = getpwuid(getuid());
+   return pw->pw_dir;
+}
+
+int XcShellCd(std::vector<std::string> args, std::ostream &err_os) {
+   static std::string pre;
+   if (args.size() > 1) {
+     err_os << "invalid args" << std::endl;
+     return ERROR_CODE_DEFAULT;
+   }
+
+   std::string path = args.empty() ? "~" : args[0];
+   if (path == "~") {
+     path = GetHome();
+   } else if (path == "-") {
+     path = pre;
+     // cover when pre is empty
+     if (path.empty()) {
+       path = ".";
+     }
+   }
+   char buf[BUFSIZ];
+   if (getcwd(buf, BUFSIZ) == nullptr) {
+     PrintSystemError(err_os);
+     return ERROR_CODE_DEFAULT;
+   }
+   pre = buf;
+
+   int ret = chdir(path.c_str());
+   if (ret == ERROR_CODE_SYSTEM) {
+     PrintSystemError(err_os);
+     return ERROR_CODE_DEFAULT;
+   }
+   return 0;
+ }
+```
+
+这里我们用`chdir`系统调用修改当前进程的工作目录，为了支持`cd ~`切到用户HOME目录，我们使用了`getuid`系统调用获取用户的id，通过`getpwuid`获取用户的HOME目录。为了支持`cd -`切到之前的目录，我们使用了`static`变量来保存用户之前的目录。
+
+为了支持以后更多的内建命令，我们这里使用了一个map来保护内建指令的名字和对应的handler。
+
+```c++
+std::map<std::string, int (*)(std::vector<std::string>, std::ostream &)> mp = {
+     {"cd", XcShellCd}};
+```
+
+handler为一个函数指针，指向了返回值为int，参数为args和ostream的函数。
+
+[相关代码提交](https://github.com/superxcgm/xcShell/pull/19) （可以先忽略代码中和管道`pipe`相关的代码）
 
 ### 显示当前所在目录
 
