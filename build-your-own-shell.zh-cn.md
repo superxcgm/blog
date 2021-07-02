@@ -226,7 +226,7 @@ int XcShellCd(std::vector<std::string> args, std::ostream &err_os) {
 
 这里我们用`chdir`系统调用修改当前进程的工作目录，为了支持`cd ~`切到用户HOME目录，我们使用了`getuid`系统调用获取用户的id，通过`getpwuid`获取用户的HOME目录。为了支持`cd -`切到之前的目录，我们使用了`static`变量来保存用户之前的目录。
 
-为了支持以后更多的内建命令，我们这里使用了一个map来保护内建指令的名字和对应的handler。
+为了支持以后更多的内建命令，我们这里使用了一个map来保存内建指令的名字和对应的handler。
 
 ```c++
 std::map<std::string, int (*)(std::vector<std::string>, std::ostream &)> mp = {
@@ -241,7 +241,7 @@ handler为一个函数指针，指向了返回值为int，参数为args和ostrea
 
 一般来说，shell都会提示我们当前在哪个目录，所以我们也需要实现这个功能。我们这里不会显示完整的绝对路径，只会显示最后一级目录，比如`/home/superxcgm/Download`，我们只会显示`Download`。
 
-我们通过`getcwd`库函数获的当前的工作目录（绝对路径）。
+我们通过`getcwd`库函数获取当前的工作目录（绝对路径）。
 
 ```c++
 std::string xc_utils::GetCurrentWorkingDirectory(std::ostream& err_os) {
